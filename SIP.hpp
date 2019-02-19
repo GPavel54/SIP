@@ -10,6 +10,7 @@
 
 #define SIP_PORT 15065
 #define SIP_PORT_SRC "15065"
+#define SIP_SRC_GET "15063"
 #define DEF_SIP_PORT "5060"
 
 

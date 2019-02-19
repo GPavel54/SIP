@@ -230,12 +230,13 @@ void SIP::generateInviteRequest(string& header, struct Channel& ch)
         "Subject: Phone call\r\n",
         "Content-Length: ",
         "v=0\r\n",
-        "o=wiproberu 2381 1459 IN IP4 192.168.14.184\r\n",
-        // "s=Talk\r\n",
-        // "c=IN IP4 192.168.14.184\r\n",
-        // "t=0 0\r\n",
-        // "m=audio 7078 RTP/AVP 124 111 110 0 8 101\r\n",
-        // "a=rtpmap:124 opus/48000\r\n",
+        "o=wiproberu " + SIP::getRandSID() + " 145 IN IP4 192.168.14.184\r\n",
+        "s=Talk\r\n",
+        "c=IN IP4 192.168.14.184\r\n",
+        "t=0 0\r\n",
+        "m=audio 17078 RTP/AVP 99 124\r\n",
+        "a=rtpmap:99 G.729/8000\r\n",
+        "a=rtpmap:124 opus/48000\r\n",
         // "a=fmtp:124 useinbandfec=1; usedtx=1\r\n",
         ""
     };
@@ -259,17 +260,17 @@ void SIP::generateInviteRequest(string& header, struct Channel& ch)
     {
         Csq = 20;
     }
-    fieldsv[0] += "sip:" + ch.callTo + "@5.44.169.206:15063;line=" + line + " SIP/2.0\r\n";
-    fieldsv[2] += ch.src_name + ":" + SIP_PORT_SRC + ";rport="+ SIP_PORT_SRC +";branch=" + branchForCall + ";received=5.44.169.206\r\n";
+    fieldsv[0] += "sip:" + ch.callTo + "@5.44.169.206;line=" + line + " SIP/2.0\r\n";
+    fieldsv[2] += ch.src_name + ":" + SIP_SRC_GET + ";rport="+ SIP_SRC_GET +";branch=" + branchForCall + ";received=5.44.169.206\r\n";
     fieldsv[3] += ch.dst_name + ":" + DEF_SIP_PORT + ";lr>\r\n";
     fieldsv[4] += ch.login + "@sip.linphone.org>;tag=" + tagForCall + "\r\n";
     fieldsv[5] += "sip:" + ch.callTo + "@sip.linphone.org" + ">\r\n";
     fieldsv[6] += idForCall + "\r\n";
     fieldsv[7] += to_string(Csq) + " INVITE\r\n";
     Csq++;
-    fieldsv[9] += ch.login + "@" + ch.src_name + ":" + SIP_PORT_SRC +">\r\n";
+    fieldsv[9] += ch.login + "@" + ch.src_name + ":" + SIP_SRC_GET +">\r\n";
     int countLen = 0;
-    for (auto i = fieldsv.begin() + 14; *i != ""; i++)
+    for (auto i = fieldsv.begin() + 15; *i != ""; i++)
     {
         countLen += i->length();
     }
@@ -282,7 +283,8 @@ void SIP::generateInviteRequest(string& header, struct Channel& ch)
 
 string SIP::getRandSID()
 {
-    
+    srand(time(0));
+    return to_string(rand());
 }
 
 /*void SIP::setCsq()

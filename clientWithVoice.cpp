@@ -1,5 +1,4 @@
 #include "SIP.hpp"
-#define SIP_PORT 15065
 #define CLR_REQ request = "";
 
 using namespace boost::asio;
@@ -61,8 +60,6 @@ int main(int argc, char ** argv)
     int bytes;
     local_socket->send_to(boost::asio::buffer(request), ep);
     local_socket->receive_from(boost::asio::buffer(response), sender_ep);
-    
-    cout << "First response = " << endl << response << endl;
     obj.processResponse(fields, response);
 
     obj.countResponse(fields, ch);
@@ -72,22 +69,19 @@ int main(int argc, char ** argv)
     bytes = local_socket->send_to(boost::asio::buffer(request), ep);
     bytes = local_socket->receive_from(boost::asio::buffer(secondResponse), sender_ep);
 
-    cout << "Second response = " << secondResponse << endl;
-
     /* End of sending REGISTER request */
     obj.generateInviteRequest(request, ch);
     // cout << request;
-
-    cout << "Generated INVITE request:" << endl << request;
 
     /* Block of sending INVITE Request */
     bytes = local_socket->send_to(boost::asio::buffer(request), ep);
     cout << "Successfully sent " << bytes << " bytes to " << "91.121.209.194" << endl;
     cout << "Waiting answer from sip server..." << endl;
     //string response;
+    memset(response, 0, 1000);
     bytes = local_socket->receive_from(boost::asio::buffer(response), sender_ep);
-    cout << "Recieve " << bytes << " bytes from sip server " << endl;
     cout << "Answer from server : " << response << endl;
+    //cout << obj.getfield(response, "");
     /* End of sending INVITE request */
     return 0;
 }
