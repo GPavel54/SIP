@@ -75,12 +75,34 @@ int main(int argc, char ** argv)
 
     /* Block of sending INVITE Request */
     bytes = local_socket->send_to(boost::asio::buffer(request), ep);
-    cout << "Successfully sent " << bytes << " bytes to " << "91.121.209.194" << endl;
     cout << "Waiting answer from sip server..." << endl;
     //string response;
     memset(response, 0, 1000);
     bytes = local_socket->receive_from(boost::asio::buffer(response), sender_ep);
     cout << "Answer from server : " << response << endl;
+    string str_response = response;
+
+    if (str_response.find("407 Proxy Authentication Required") != string::npos)
+    {
+        CLR_REQ;
+        fields["tag"] = SIP::getfield(str_response, "tag");
+        obj.generateAck(request, fields, ch);
+        cout << endl << endl << "Ack request = " << endl << request;
+        bytes = local_socket->send_to(boost::asio::buffer(request), ep);
+    }
+    obj.processResponse(fields, str_response.c_str());
+
+    fields["uri"] = "sip:" + ch.callTo + "@" + ch.host;
+    obj.countResponse(fields, ch);
+    CLR_REQ;
+    obj.generateProxyAuthHeader(request, fields, ch);
+    cout << "Sending proxy auth request" << endl;
+    bytes = local_socket->send_to(boost::asio::buffer(request), ep);
+
+    memset(response, 0, 1000);
+    cout << " Trying to get answer from server" << endl;
+    bytes = local_socket->receive_from(boost::asio::buffer(response), sender_ep);
+
     //cout << obj.getfield(response, "");
     /* End of sending INVITE request */
     return 0;

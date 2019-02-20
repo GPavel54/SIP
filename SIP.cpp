@@ -11,7 +11,7 @@ string SIP::processResponse(map<string, string>& fields, const char * response)
 {
     string tmp = response;
     string hdr(tmp.begin(), tmp.begin() + tmp.find("\r\n"));
-    if (hdr.find("401") != string::npos)
+    if (hdr.find("401") != string::npos || hdr.find("407") != string::npos)
     {
         fields["nonce"] = getfield(tmp, "nonce");
         fields["opaque"] = getfield(tmp, "opaque");
@@ -51,7 +51,14 @@ void SIP::countResponse(map<string, string>& fields, struct Channel& channel_)
     unsigned char cHA1[MD5_DIGEST_LENGTH] = "";
     unsigned char cHA2[MD5_DIGEST_LENGTH] = "";
     HA1(channel_.login.c_str(), fields["realm"].c_str(), channel_.password.c_str(), cHA1);
-    HA2("REGISTER", channel_.host.c_str(), cHA2);
+    if (fields["uri"] == "")   // доделать эту проверку на то, какой тип запроса и uri
+    {
+        HA2("REGISTER", channel_.host.c_str(), cHA2);
+    }
+    else
+    {
+        HA2("INVITE", fields["uri"].c_str(), cHA2);
+    }
     char HA1C[33] = "";
     char HA2C[33] = "";
     char buff[3];
@@ -92,8 +99,7 @@ void SIP::countResponse(map<string, string>& fields, struct Channel& channel_)
 
 string SIP::getfield(string& str, const string field)
 {
-    size_t pos;
-    pos = str.find(field);
+    size_t pos= str.find(field);
     string::iterator i = str.begin() + pos;
     string out;
     if (field == "received")
@@ -108,6 +114,19 @@ string SIP::getfield(string& str, const string field)
             out.push_back(*i);
             i++;
         }
+    }
+    else if (field == "tag")
+    {
+        pos = str.find("To");
+        string tmp = str.substr(pos);
+        pos = tmp.find("tag");
+        i = tmp.begin() + pos + 4;
+        while (*i != '\r')
+        {
+            out.push_back(*i);
+            i++;
+        }
+        return out;
     }
     else
     {
@@ -210,6 +229,51 @@ void SIP::generateAuthHeader(string& header, map<string, string>& fields, struct
     header = ss.str();
 }
 
+void SIP::generateProxyAuthHeader(string& header, map<string, string>& fields, struct Channel& channel_)
+{
+    vector<string> fieldsv{
+        "INVITE ",
+        "Via: SIP/2.0/UDP ",
+        "From: <sip:",
+        "To: <sip:",
+        "Call-ID: ",
+  /*5*/ "CSeq: ",
+        "Contact: <sip:",
+        "Proxy-Authorization: Digest username=\"",
+        "Content-Type: application/sdp\r\n",
+        "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO\r\n",
+ /*10*/ "Max-Forwards: 70\r\n",
+        "User-Agent: Wiprobe\r\n",
+        "Subject: Phone call\r\n",
+        "Content-Length: ",
+        
+    };
+    fieldsv[0] += "sip:" + channel_.callTo + "@" + channel_.host + " SIP/2.0\r\n";
+    fieldsv[1] += channel_.src_name + ";rport;branch=z9hG4bK" + generateUnique() + "\r\n";
+    fieldsv[2] += channel_.login + "@" + channel_.host + ">;tag=" + tagForCall + "\r\n";
+    fieldsv[3] += channel_.callTo + "@" + channel_.host + ">\r\n";
+    fieldsv[4] += idForCall + "\r\n";
+    fieldsv[5] += to_string(Csq) + " INVITE\r\n";
+    fieldsv[6] += channel_.login + "@5.44.169.206:" + SIP_PORT_SRC + ">\r\n";
+    fieldsv[7] += channel_.login + "\", realm=\"" + fields["realm"] + "\", nonce=\""
+                         + fields["nonce"] + "\", uri=\"" + fields["uri"] + "\", response=\""
+                         + fields["response"] + "\", algorithm=MD5, cnonce=\"" + fields["cnonce"]
+                         + "\", opaque=\"" + fields["opaque"] + "\", qop=" + fields["qop"]
+                         + ", nc=00000001\r\n";
+    fieldsv[13] += to_string(bodySDP.length()) + "\r\n\r\n";
+    // fieldsv[11] += channel_.login + "\", realm=\"" + fields["realm"] + "\", nonce=\""
+    //                     + fields["nonce"] + "\", uri=\"" + channel_.host + "\", response=\""
+    //                     + fields["response"] + "\", algorithm=MD5, cnonce=\"" + fields["cnonce"]
+    //                     + "\", opaque=\"" + fields["opaque"] + "\", qop=" + fields["qop"]
+    //                     + ", nc=00000001\r\n";
+    
+    for (auto i = fieldsv.begin(); i < fieldsv.end(); i++)
+    {
+        header += *i;
+    }
+    header += bodySDP;
+}
+
 void SIP::generateInviteRequest(string& header, struct Channel& ch)
 {
     header = "";
@@ -230,14 +294,14 @@ void SIP::generateInviteRequest(string& header, struct Channel& ch)
         "Subject: Phone call\r\n",
         "Content-Length: ",
         "v=0\r\n",
-        "o=wiproberu " + SIP::getRandSID() + " 145 IN IP4 192.168.14.184\r\n",
+        "o=" + ch.login + " " + SIP::getRandSID() + " 145 IN IP4 " + ch.src_name + "\r\n",
         "s=Talk\r\n",
-        "c=IN IP4 192.168.14.184\r\n",
+        "c=IN IP4 " + ch.src_name + "\r\n",
         "t=0 0\r\n",
+        "a=nortpproxy:yes\r\n",
         "m=audio 17078 RTP/AVP 99 124\r\n",
         "a=rtpmap:99 G.729/8000\r\n",
         "a=rtpmap:124 opus/48000\r\n",
-        // "a=fmtp:124 useinbandfec=1; usedtx=1\r\n",
         ""
     };
     if (line == "")
@@ -266,6 +330,7 @@ void SIP::generateInviteRequest(string& header, struct Channel& ch)
     fieldsv[4] += ch.login + "@sip.linphone.org>;tag=" + tagForCall + "\r\n";
     fieldsv[5] += "sip:" + ch.callTo + "@sip.linphone.org" + ">\r\n";
     fieldsv[6] += idForCall + "\r\n";
+    Csq--;
     fieldsv[7] += to_string(Csq) + " INVITE\r\n";
     Csq++;
     fieldsv[9] += ch.login + "@" + ch.src_name + ":" + SIP_SRC_GET +">\r\n";
@@ -275,6 +340,12 @@ void SIP::generateInviteRequest(string& header, struct Channel& ch)
         countLen += i->length();
     }
     fieldsv[14] += to_string(countLen) + "\r\n\r\n";
+    /* copy sdp body for request after authorization*/
+    bodySDP = "";
+    for (auto i = fieldsv.begin() + 15; i < fieldsv.end(); i++)
+    {
+        bodySDP += *i;
+    }
     for (auto i = fieldsv.begin(); i < fieldsv.end(); i++)
     {
         header += *i;
@@ -285,6 +356,32 @@ string SIP::getRandSID()
 {
     srand(time(0));
     return to_string(rand());
+}
+
+void SIP::generateAck(string& header, map<string, string>& fields, struct Channel& channel_)
+{
+    header = "";
+    vector<string> fieldsv = {
+        "ACK sip:",
+        "Via: SIP/2.0/UDP ",
+        "From: <sip:",
+        "To: <sip:",
+        "Call-ID: ",
+        "CSeq: ",
+        "Content-Length: 0\r\n\r\n",
+        "",
+    };
+    fieldsv[0] += channel_.callTo + "@" + channel_.host + " SIP/2.0\r\n";
+    fieldsv[1] += channel_.src_name + ":" + SIP_SRC_GET + ";rport;branch=" + branchForCall + "\r\n";
+    fieldsv[2] += channel_.login + "@" + channel_.host + ">;tag=" + tagForCall + "\r\n";
+    fieldsv[3] += channel_.callTo + "@" + channel_.host + ">;tag=" + fields["tag"] + "\r\n";
+    fieldsv[4] += idForCall + "\r\n";
+    fieldsv[5] += to_string(Csq) + " ACK\r\n";
+    Csq++;
+    for (auto i = fieldsv.begin(); i < fieldsv.end(); i++)
+    {
+        header += *i;
+    }
 }
 
 /*void SIP::setCsq()

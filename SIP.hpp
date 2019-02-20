@@ -10,7 +10,7 @@
 
 #define SIP_PORT 15065
 #define SIP_PORT_SRC "15065"
-#define SIP_SRC_GET "15063"
+#define SIP_SRC_GET "15065"
 #define DEF_SIP_PORT "5060"
 
 
@@ -35,18 +35,22 @@ class SIP
     static string idForCall;
     static string line;
     static int Csq;
+    string bodySDP;
     public:
     /*void setCsq();*/
     string processResponse(map<string, string>& fields, const char * response);
     void HA1(const char * username, const char * realm, const char * passwd, unsigned char * out);
     void HA2(const char * method, const char * uri, unsigned char * out);
     void countResponse(map<string, string>& fields, struct Channel& channel_);
-    string getfield(string& str, const string field);
+    static string getfield(string& str, const string field);
     static string generateUnique();
     static string getRandSID();
     void generateRegisterHeader(string& header, map<string, string>& fields, struct Channel& channel_);
     void generateAuthHeader(string& header, map<string, string>& fields, struct Channel& channel_);
     void generateInviteRequest(string& header, struct Channel& ch);
+    void generateProxyAuthHeader(string& header, map<string, string>& fields, struct Channel& channel_);
+    void createAuthField(string& field, map<string, string>& fields, struct Channel& channel_);
+    void generateAck(string& header, map<string, string>& fields, struct Channel& channel_);
 };
 
 #endif
